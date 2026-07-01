@@ -144,6 +144,14 @@
   .swatch.selected{ border-color:var(--text-primary); }
   .empty{ color:var(--text-muted); font-size:13px; padding:24px 0; text-align:center; }
   .loading-msg{ color:var(--text-muted); font-size:13px; padding:40px 0; text-align:center; }
+  .cat-actions{ display:flex; gap:6px; }
+  .icon-btn{
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text-secondary);
+    padding:5px 10px; border-radius:6px; font-size:12px; cursor:pointer; transition: background .12s, color .12s;
+  }
+  .icon-btn:hover{ background:var(--surface-hover); color:var(--text-primary); }
+  .icon-btn.danger:hover{ color:var(--coral); border-color:var(--coral); }
+  .tx-actions{ display:flex; gap:6px; justify-content:flex-end; }
 </style>
 </head>
 <body>
@@ -236,6 +244,7 @@
           </div>
           <div class="field"><label>Amount</label><input type="number" id="tx-amount" placeholder="0.00" step="0.01"></div>
           <button class="btn btn-primary" id="tx-submit">Add</button>
+          <button class="btn" id="tx-cancel" style="display:none;">Cancel</button>
         </div>
       </div>
       <table>
@@ -254,6 +263,7 @@
         <div class="field" style="max-width:280px; margin-bottom:12px;"><label>Name</label><input type="text" id="cat-name" placeholder="e.g. Subscriptions"></div>
         <div class="field" style="margin-bottom:14px;"><label>Color</label><div class="swatch-picker" id="swatch-picker"></div></div>
         <button class="btn btn-primary" id="cat-submit">Add category</button>
+        <button class="btn" id="cat-cancel" style="display:none;">Cancel</button>
       </div>
       <div class="cat-grid" id="cat-grid"></div>
     </div>
@@ -280,6 +290,8 @@ let transactions = [];
 let selectedSwatch = swatchColors[0];
 let authMode = 'signin'; // or 'signup'
 let currentUser = null;
+let editingTxId = null;
+let editingCatId = null;
 
 function fmt(n){
   const sign = n < 0 ? '-' : '';
@@ -354,15 +366,21 @@ authSubmit.addEventListener('click', async ()=>{
 });
 
 // ================= Auth state handling =================
+let isLoadingData = false;
+let loadedForUserId = null;
+
 sb.auth.onAuthStateChange((event, session)=>{
   if(session && session.user){
     currentUser = session.user;
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app-screen').classList.add('active');
     document.getElementById('signed-in-email').textContent = currentUser.email;
-    loadEverything();
+    if(loadedForUserId !== currentUser.id){
+      loadEverything();
+    }
   } else {
     currentUser = null;
+    loadedForUserId = null;
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('app-screen').classList.remove('active');
   }
@@ -384,6 +402,10 @@ document.querySelectorAll('.nav-item').forEach(btn=>{
 
 // ================= Data loading =================
 async function loadEverything(){
+  if(isLoadingData) return;
+  isLoadingData = true;
+  const userIdAtStart = currentUser.id;
+
   document.getElementById('recent-list').innerHTML = '<tr><td class="loading-msg">Loading...</td></tr>';
 
   let { data: cats } = await sb.from('categories').select('*').order('created_at');
@@ -402,6 +424,8 @@ async function loadEverything(){
   }));
 
   renderAll();
+  loadedForUserId = userIdAtStart;
+  isLoadingData = false;
 }
 
 // ================= Render: Dashboard =================
@@ -464,22 +488,53 @@ function renderTransactions(){
       <td>${t.desc}</td>
       <td><span class="cat-pill"><span class="cat-dot" style="background:${c ? c.color : '#666'};"></span>${c ? c.name : '—'}</span></td>
       <td class="right mono ${cls}">${sign}${fmt(t.amount)}</td>
-      <td class="right"><button class="row-del" data-id="${t.id}">remove</button></td>
+      <td class="right"><div class="tx-actions"><button class="icon-btn" data-id="${t.id}" data-action="edit">edit</button> <button class="icon-btn danger" data-id="${t.id}" data-action="remove">remove</button></div></td>
     </tr>`;
   }).join('') || '<tr><td class="empty" colspan="5">No transactions yet. Add your first one above.</td></tr>';
 
-  document.querySelectorAll('#tx-list .row-del').forEach(btn=>{
+  document.querySelectorAll('#tx-list .icon-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      await sb.from('transactions').delete().eq('id', btn.dataset.id);
-      transactions = transactions.filter(t => t.id !== btn.dataset.id);
-      renderAll();
+      const id = btn.dataset.id;
+      if(btn.dataset.action === 'remove'){
+        await sb.from('transactions').delete().eq('id', id);
+        transactions = transactions.filter(t => t.id !== id);
+        renderAll();
+      } else {
+        const t = transactions.find(tx => tx.id === id);
+        if(!t) return;
+        editingTxId = id;
+        document.getElementById('tx-desc').value = t.desc;
+        document.getElementById('tx-cat').value = t.catId;
+        document.getElementById('tx-type').value = t.type;
+        document.getElementById('tx-amount').value = t.amount;
+        document.getElementById('tx-submit').textContent = 'Save changes';
+        document.getElementById('tx-cancel').style.display = 'inline-block';
+        document.getElementById('tx-form-card').classList.add('open');
+      }
     });
   });
 }
 
 document.getElementById('toggle-form').addEventListener('click', ()=>{
-  document.getElementById('tx-form-card').classList.toggle('open');
+  const card = document.getElementById('tx-form-card');
+  if(card.classList.contains('open')){
+    resetTxForm();
+  } else {
+    resetTxForm();
+    card.classList.add('open');
+  }
 });
+
+function resetTxForm(){
+  editingTxId = null;
+  document.getElementById('tx-desc').value = '';
+  document.getElementById('tx-amount').value = '';
+  document.getElementById('tx-submit').textContent = 'Add';
+  document.getElementById('tx-cancel').style.display = 'none';
+  document.getElementById('tx-form-card').classList.remove('open');
+}
+
+document.getElementById('tx-cancel').addEventListener('click', resetTxForm);
 
 document.getElementById('tx-submit').addEventListener('click', async ()=>{
   const desc = document.getElementById('tx-desc').value.trim();
@@ -491,6 +546,23 @@ document.getElementById('tx-submit').addEventListener('click', async ()=>{
   const btn = document.getElementById('tx-submit');
   btn.disabled = true;
 
+  if(editingTxId){
+    const { data, error } = await sb.from('transactions')
+      .update({ category_id: catId, description: desc, type, amount })
+      .eq('id', editingTxId).select().single();
+
+    btn.disabled = false;
+    if(error){ alert(error.message); return; }
+
+    const idx = transactions.findIndex(t => t.id === editingTxId);
+    if(idx > -1){
+      transactions[idx] = { id:data.id, date:data.date, desc:data.description, catId:data.category_id, type:data.type, amount:Number(data.amount) };
+    }
+    resetTxForm();
+    renderAll();
+    return;
+  }
+
   const { data, error } = await sb.from('transactions').insert({
     user_id: currentUser.id, category_id: catId, description: desc, type, amount,
     date: new Date().toISOString().slice(0,10)
@@ -500,8 +572,7 @@ document.getElementById('tx-submit').addEventListener('click', async ()=>{
   if(error){ alert(error.message); return; }
 
   transactions.unshift({ id:data.id, date:data.date, desc:data.description, catId:data.category_id, type:data.type, amount:Number(data.amount) });
-  document.getElementById('tx-desc').value = '';
-  document.getElementById('tx-amount').value = '';
+  resetTxForm();
   renderAll();
 });
 
@@ -526,26 +597,74 @@ function renderCategories(){
         <div class="cat-swatch" style="background:${c.color};"></div>
         <div class="cat-name">${c.name}</div>
       </div>
-      ${inUse ? '' : `<button class="row-del" data-id="${c.id}">remove</button>`}
+      <div class="cat-actions">
+        <button class="icon-btn" data-id="${c.id}" data-action="edit">edit</button>
+        ${inUse ? '' : `<button class="icon-btn danger" data-id="${c.id}" data-action="remove">remove</button>`}
+      </div>
     </div>`;
   }).join('') || '<div class="empty">No categories yet.</div>';
 
-  document.querySelectorAll('#cat-grid .row-del').forEach(btn=>{
+  document.querySelectorAll('#cat-grid .icon-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      await sb.from('categories').delete().eq('id', btn.dataset.id);
-      categories = categories.filter(c => c.id !== btn.dataset.id);
-      renderAll();
+      const id = btn.dataset.id;
+      if(btn.dataset.action === 'remove'){
+        await sb.from('categories').delete().eq('id', id);
+        categories = categories.filter(c => c.id !== id);
+        renderAll();
+      } else {
+        const c = categories.find(cat => cat.id === id);
+        if(!c) return;
+        editingCatId = id;
+        document.getElementById('cat-name').value = c.name;
+        selectedSwatch = c.color;
+        renderSwatchPicker();
+        document.getElementById('cat-submit').textContent = 'Save changes';
+        document.getElementById('cat-cancel').style.display = 'inline-block';
+        document.getElementById('cat-form-card').classList.add('open');
+      }
     });
   });
 }
 
 document.getElementById('toggle-cat-form').addEventListener('click', ()=>{
-  document.getElementById('cat-form-card').classList.toggle('open');
+  const card = document.getElementById('cat-form-card');
+  if(card.classList.contains('open')){
+    resetCatForm();
+  } else {
+    resetCatForm();
+    card.classList.add('open');
+  }
 });
+
+function resetCatForm(){
+  editingCatId = null;
+  document.getElementById('cat-name').value = '';
+  selectedSwatch = swatchColors[0];
+  renderSwatchPicker();
+  document.getElementById('cat-submit').textContent = 'Add category';
+  document.getElementById('cat-cancel').style.display = 'none';
+  document.getElementById('cat-form-card').classList.remove('open');
+}
+
+document.getElementById('cat-cancel').addEventListener('click', resetCatForm);
 
 document.getElementById('cat-submit').addEventListener('click', async ()=>{
   const name = document.getElementById('cat-name').value.trim();
   if(!name) return;
+
+  if(editingCatId){
+    const { data, error } = await sb.from('categories')
+      .update({ name, color: selectedSwatch })
+      .eq('id', editingCatId).select().single();
+
+    if(error){ alert(error.message); return; }
+
+    const idx = categories.findIndex(c => c.id === editingCatId);
+    if(idx > -1){ categories[idx] = { id:data.id, name:data.name, color:data.color }; }
+    resetCatForm();
+    renderAll();
+    return;
+  }
 
   const { data, error } = await sb.from('categories').insert({
     user_id: currentUser.id, name, color: selectedSwatch
@@ -553,7 +672,7 @@ document.getElementById('cat-submit').addEventListener('click', async ()=>{
 
   if(error){ alert(error.message); return; }
   categories.push({ id:data.id, name:data.name, color:data.color });
-  document.getElementById('cat-name').value = '';
+  resetCatForm();
   renderAll();
 });
 
