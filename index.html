@@ -49,6 +49,7 @@
   .auth-field{ margin-bottom:14px; }
   .auth-field label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
   .auth-error{ color:var(--coral); font-size:12px; margin-top:10px; min-height:16px; }
+  .auth-success{ color:var(--teal); font-size:12px; margin-top:10px; line-height:1.5; }
   .auth-switch{ margin-top:16px; font-size:12px; color:var(--text-muted); text-align:center; }
   .auth-switch a{ color:var(--amber); cursor:pointer; text-decoration:none; }
 
@@ -161,9 +162,14 @@
       <label>Password</label>
       <input type="password" id="auth-password" placeholder="At least 6 characters">
     </div>
+    <div class="auth-field" id="auth-confirm-field" style="display:none;">
+      <label>Confirm password</label>
+      <input type="password" id="auth-password-confirm" placeholder="Re-enter your password">
+    </div>
 
     <button class="btn btn-primary btn-full" id="auth-submit">Sign in</button>
     <div class="auth-error" id="auth-error"></div>
+    <div class="auth-success" id="auth-success"></div>
 
     <div class="auth-switch">
       <span id="auth-switch-text">Don't have an account? <a id="auth-switch-link">Sign up</a></span>
@@ -277,19 +283,23 @@ let currentUser = null;
 
 function fmt(n){
   const sign = n < 0 ? '-' : '';
-  return sign + '$' + Math.abs(n).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  return sign + '₹' + Math.abs(n).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 function catById(id){ return categories.find(c => c.id === id); }
 
 // ================= Auth screen logic =================
 const authError = document.getElementById('auth-error');
+const authSuccess = document.getElementById('auth-success');
 const authModeLabel = document.getElementById('auth-mode-label');
 const authSubmit = document.getElementById('auth-submit');
 const authSwitchText = document.getElementById('auth-switch-text');
+const authConfirmField = document.getElementById('auth-confirm-field');
 
 function setAuthMode(mode){
   authMode = mode;
   authError.textContent = '';
+  authSuccess.textContent = '';
+  authConfirmField.style.display = mode === 'signup' ? 'block' : 'none';
   if(mode === 'signin'){
     authModeLabel.textContent = 'Sign in to your account';
     authSubmit.textContent = 'Sign in';
@@ -306,8 +316,15 @@ setAuthMode('signin');
 authSubmit.addEventListener('click', async ()=>{
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
+  const confirmPassword = document.getElementById('auth-password-confirm').value;
   authError.textContent = '';
+  authSuccess.textContent = '';
+
   if(!email || !password){ authError.textContent = 'Enter an email and password.'; return; }
+  if(authMode === 'signup'){
+    if(password.length < 6){ authError.textContent = 'Password must be at least 6 characters.'; return; }
+    if(password !== confirmPassword){ authError.textContent = 'Passwords don\'t match.'; return; }
+  }
 
   authSubmit.disabled = true;
   authSubmit.textContent = 'Please wait...';
@@ -327,8 +344,10 @@ authSubmit.addEventListener('click', async ()=>{
     return;
   }
   if(authMode === 'signup' && !result.data.session){
-    authError.textContent = 'Check your email to confirm your account, then sign in.';
+    document.getElementById('auth-password').value = '';
+    document.getElementById('auth-password-confirm').value = '';
     setAuthMode('signin');
+    authSuccess.textContent = `We've sent a confirmation link to ${email}. Verify your email, then sign in here.`;
     return;
   }
   // signed in — onAuthStateChange will handle showing the app
