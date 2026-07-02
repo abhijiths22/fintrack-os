@@ -168,6 +168,15 @@
   .add-funds-row{ display:flex; gap:6px; align-items:center; }
   .add-funds-row input{ width:100px; padding:6px 8px; }
   .add-funds-row .btn{ padding:6px 12px; font-size:12px; }
+  .account-type-badge{
+    font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted);
+    background:var(--surface-2); padding:2px 7px; border-radius:5px; margin-top:4px; display:inline-block;
+  }
+  .account-chip{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    padding:6px 12px; font-size:12px; display:flex; align-items:center; gap:8px;
+  }
+  .account-chip .cat-dot{ flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -210,6 +219,7 @@
     </div>
     <div class="nav">
       <button class="nav-item active" data-view="dashboard"><span class="dot"></span>Dashboard</button>
+      <button class="nav-item" data-view="accounts"><span class="dot"></span>Accounts</button>
       <button class="nav-item" data-view="transactions"><span class="dot"></span>Transactions</button>
       <button class="nav-item" data-view="categories"><span class="dot"></span>Categories</button>
       <button class="nav-item" data-view="budgets"><span class="dot"></span>Budgets</button>
@@ -230,6 +240,7 @@
         <div class="hero-label">Net balance</div>
         <div class="hero-balance mono" id="hero-balance">$0.00</div>
         <div class="hero-sub" id="hero-sub"></div>
+        <div id="account-chips" style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;"></div>
       </div>
       <div class="card-row">
         <div class="stat-card">
@@ -247,6 +258,31 @@
       <table><tbody id="recent-list"></tbody></table>
     </div>
 
+    <!-- ACCOUNTS -->
+    <div class="view" id="view-accounts">
+      <div class="header-row">
+        <div><h1>Accounts</h1><div class="subtitle">Where your money actually sits</div></div>
+        <button class="btn btn-primary" id="toggle-account-form">+ Add account</button>
+      </div>
+      <div class="form-card" id="account-form-card">
+        <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr auto auto;">
+          <div class="field"><label>Account name</label><input type="text" id="account-name" placeholder="e.g. HDFC Savings"></div>
+          <div class="field"><label>Type</label>
+            <select id="account-type">
+              <option value="bank">Bank</option>
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Starting balance</label><input type="number" id="account-balance" placeholder="0.00" step="0.01"></div>
+          <button class="btn btn-primary" id="account-submit">Add account</button>
+          <button class="btn" id="account-cancel" style="display:none;">Cancel</button>
+        </div>
+      </div>
+      <div class="cat-grid" id="account-grid"></div>
+    </div>
+
     <!-- TRANSACTIONS -->
     <div class="view" id="view-transactions">
       <div class="header-row">
@@ -254,8 +290,9 @@
         <button class="btn btn-primary" id="toggle-form">+ Add transaction</button>
       </div>
       <div class="form-card" id="tx-form-card">
-        <div class="form-grid">
+        <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 0.8fr 1fr auto auto;">
           <div class="field"><label>Description</label><input type="text" id="tx-desc" placeholder="e.g. Grocery run"></div>
+          <div class="field"><label>Account</label><select id="tx-account"></select></div>
           <div class="field"><label>Category</label><select id="tx-cat"></select></div>
           <div class="field"><label>Type</label>
             <select id="tx-type"><option value="expense">Expense</option><option value="income">Income</option></select>
@@ -266,7 +303,7 @@
         </div>
       </div>
       <table>
-        <thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="right">Amount</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th class="right">Amount</th><th></th></tr></thead>
         <tbody id="tx-list"></tbody>
       </table>
     </div>
@@ -342,6 +379,7 @@ let categories = [];
 let transactions = [];
 let budgets = [];
 let goals = [];
+let accounts = [];
 let selectedSwatch = swatchColors[0];
 let authMode = 'signin'; // or 'signup'
 let currentUser = null;
@@ -349,12 +387,21 @@ let editingTxId = null;
 let editingCatId = null;
 let editingBudgetId = null;
 let editingGoalId = null;
+let editingAccountId = null;
 
 function fmt(n){
   const sign = n < 0 ? '-' : '';
   return sign + '₹' + Math.abs(n).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 function catById(id){ return categories.find(c => c.id === id); }
+function accountById(id){ return accounts.find(a => a.id === id); }
+function accountBalance(accId){
+  const acc = accountById(accId);
+  if(!acc) return 0;
+  const income = transactions.filter(t=>t.accountId===accId && t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expense = transactions.filter(t=>t.accountId===accId && t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  return acc.startingBalance + income - expense;
+}
 
 // ================= Auth screen logic =================
 const authError = document.getElementById('auth-error');
@@ -475,9 +522,20 @@ async function loadEverything(){
   }
   categories = cats.map(c => ({ id:c.id, name:c.name, color:c.color }));
 
+  let { data: accs } = await sb.from('accounts').select('*').order('created_at');
+
+  // seed a default Cash account for a brand new user
+  if(!accs || accs.length === 0){
+    const { data: inserted } = await sb.from('accounts').insert([
+      { user_id: currentUser.id, name:'Cash', type:'cash', starting_balance:0, color:'#8FCB6E' }
+    ]).select();
+    accs = inserted || [];
+  }
+  accounts = accs.map(a => ({ id:a.id, name:a.name, type:a.type, startingBalance:Number(a.starting_balance), color:a.color }));
+
   const { data: txs } = await sb.from('transactions').select('*').order('date', { ascending:false });
   transactions = (txs || []).map(t => ({
-    id:t.id, date:t.date, desc:t.description, catId:t.category_id, type:t.type, amount:Number(t.amount)
+    id:t.id, date:t.date, desc:t.description, catId:t.category_id, accountId:t.account_id, type:t.type, amount:Number(t.amount)
   }));
 
   const { data: bgs } = await sb.from('budgets').select('*');
@@ -495,7 +553,7 @@ async function loadEverything(){
 function renderDashboard(){
   const income = transactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
   const expense = transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const balance = income - expense;
+  const balance = accounts.reduce((s,a) => s + accountBalance(a.id), 0);
 
   const balEl = document.getElementById('hero-balance');
   balEl.textContent = fmt(balance);
@@ -503,6 +561,11 @@ function renderDashboard(){
   document.getElementById('hero-sub').textContent = transactions.length + ' transactions logged';
   document.getElementById('stat-income').textContent = fmt(income);
   document.getElementById('stat-expense').textContent = fmt(expense);
+
+  document.getElementById('account-chips').innerHTML = accounts.map(a=>{
+    const bal = accountBalance(a.id);
+    return `<div class="account-chip"><span class="cat-dot" style="background:${a.color};"></span>${a.name}<span class="mono" style="color:var(--text-secondary);">${fmt(bal)}</span></div>`;
+  }).join('');
 
   const byCat = {};
   transactions.filter(t=>t.type==='expense').forEach(t=>{
@@ -539,21 +602,26 @@ function renderDashboard(){
 function renderCatOptions(){
   document.getElementById('tx-cat').innerHTML = categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
 }
+function renderAccountOptions(){
+  document.getElementById('tx-account').innerHTML = accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+}
 
 function renderTransactions(){
   document.getElementById('tx-count-sub').textContent = transactions.length + ' total';
   document.getElementById('tx-list').innerHTML = transactions.map(t=>{
     const c = catById(t.catId);
+    const a = accountById(t.accountId);
     const sign = t.type==='income' ? '+' : '-';
     const cls = t.type==='income' ? 'amt-income' : 'amt-expense';
     return `<tr>
       <td class="mono" style="color:var(--text-secondary);">${t.date}</td>
       <td>${t.desc}</td>
+      <td><span class="cat-pill"><span class="cat-dot" style="background:${a ? a.color : '#666'};"></span>${a ? a.name : '—'}</span></td>
       <td><span class="cat-pill"><span class="cat-dot" style="background:${c ? c.color : '#666'};"></span>${c ? c.name : '—'}</span></td>
       <td class="right mono ${cls}">${sign}${fmt(t.amount)}</td>
       <td class="right"><div class="tx-actions"><button class="icon-btn" data-id="${t.id}" data-action="edit">edit</button> <button class="icon-btn danger" data-id="${t.id}" data-action="remove">remove</button></div></td>
     </tr>`;
-  }).join('') || '<tr><td class="empty" colspan="5">No transactions yet. Add your first one above.</td></tr>';
+  }).join('') || '<tr><td class="empty" colspan="6">No transactions yet. Add your first one above.</td></tr>';
 
   document.querySelectorAll('#tx-list .icon-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -567,6 +635,7 @@ function renderTransactions(){
         if(!t) return;
         editingTxId = id;
         document.getElementById('tx-desc').value = t.desc;
+        document.getElementById('tx-account').value = t.accountId;
         document.getElementById('tx-cat').value = t.catId;
         document.getElementById('tx-type').value = t.type;
         document.getElementById('tx-amount').value = t.amount;
@@ -601,17 +670,18 @@ document.getElementById('tx-cancel').addEventListener('click', resetTxForm);
 
 document.getElementById('tx-submit').addEventListener('click', async ()=>{
   const desc = document.getElementById('tx-desc').value.trim();
+  const accountId = document.getElementById('tx-account').value;
   const catId = document.getElementById('tx-cat').value;
   const type = document.getElementById('tx-type').value;
   const amount = parseFloat(document.getElementById('tx-amount').value);
-  if(!desc || !amount || amount <= 0){ return; }
+  if(!desc || !amount || amount <= 0 || !accountId){ return; }
 
   const btn = document.getElementById('tx-submit');
   btn.disabled = true;
 
   if(editingTxId){
     const { data, error } = await sb.from('transactions')
-      .update({ category_id: catId, description: desc, type, amount })
+      .update({ account_id: accountId, category_id: catId, description: desc, type, amount })
       .eq('id', editingTxId).select().single();
 
     btn.disabled = false;
@@ -619,7 +689,7 @@ document.getElementById('tx-submit').addEventListener('click', async ()=>{
 
     const idx = transactions.findIndex(t => t.id === editingTxId);
     if(idx > -1){
-      transactions[idx] = { id:data.id, date:data.date, desc:data.description, catId:data.category_id, type:data.type, amount:Number(data.amount) };
+      transactions[idx] = { id:data.id, date:data.date, desc:data.description, catId:data.category_id, accountId:data.account_id, type:data.type, amount:Number(data.amount) };
     }
     resetTxForm();
     renderAll();
@@ -627,14 +697,14 @@ document.getElementById('tx-submit').addEventListener('click', async ()=>{
   }
 
   const { data, error } = await sb.from('transactions').insert({
-    user_id: currentUser.id, category_id: catId, description: desc, type, amount,
+    user_id: currentUser.id, account_id: accountId, category_id: catId, description: desc, type, amount,
     date: new Date().toISOString().slice(0,10)
   }).select().single();
 
   btn.disabled = false;
   if(error){ alert(error.message); return; }
 
-  transactions.unshift({ id:data.id, date:data.date, desc:data.description, catId:data.category_id, type:data.type, amount:Number(data.amount) });
+  transactions.unshift({ id:data.id, date:data.date, desc:data.description, catId:data.category_id, accountId:data.account_id, type:data.type, amount:Number(data.amount) });
   resetTxForm();
   renderAll();
 });
@@ -989,15 +1059,114 @@ document.getElementById('goal-submit').addEventListener('click', async ()=>{
   renderAll();
 });
 
+// ================= Accounts =================
+const accountTypeLabels = { bank:'Bank', cash:'Cash', card:'Card', other:'Other' };
+
+function renderAccounts(){
+  document.getElementById('account-grid').innerHTML = accounts.map(a=>{
+    const inUse = transactions.some(t=>t.accountId===a.id);
+    const bal = accountBalance(a.id);
+    return `<div class="cat-card">
+      <div class="cat-card-left">
+        <div class="cat-swatch" style="background:${a.color};"></div>
+        <div>
+          <div class="cat-name">${a.name}</div>
+          <div class="account-type-badge">${accountTypeLabels[a.type] || a.type}</div>
+          <div class="mono" style="font-size:13px; margin-top:6px; color:var(--text-secondary);">${fmt(bal)}</div>
+        </div>
+      </div>
+      <div class="cat-actions">
+        <button class="icon-btn" data-id="${a.id}" data-action="edit">edit</button>
+        ${inUse ? '' : `<button class="icon-btn danger" data-id="${a.id}" data-action="remove">remove</button>`}
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty">No accounts yet.</div>';
+
+  document.querySelectorAll('#account-grid .icon-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.id;
+      if(btn.dataset.action === 'remove'){
+        await sb.from('accounts').delete().eq('id', id);
+        accounts = accounts.filter(a => a.id !== id);
+        renderAll();
+      } else {
+        const a = accountById(id);
+        if(!a) return;
+        editingAccountId = id;
+        document.getElementById('account-name').value = a.name;
+        document.getElementById('account-type').value = a.type;
+        document.getElementById('account-balance').value = a.startingBalance;
+        document.getElementById('account-submit').textContent = 'Save changes';
+        document.getElementById('account-cancel').style.display = 'inline-block';
+        document.getElementById('account-form-card').classList.add('open');
+      }
+    });
+  });
+}
+
+function resetAccountForm(){
+  editingAccountId = null;
+  document.getElementById('account-name').value = '';
+  document.getElementById('account-type').value = 'bank';
+  document.getElementById('account-balance').value = '';
+  document.getElementById('account-submit').textContent = 'Add account';
+  document.getElementById('account-cancel').style.display = 'none';
+  document.getElementById('account-form-card').classList.remove('open');
+}
+
+document.getElementById('toggle-account-form').addEventListener('click', ()=>{
+  const card = document.getElementById('account-form-card');
+  if(card.classList.contains('open')){
+    resetAccountForm();
+  } else {
+    resetAccountForm();
+    card.classList.add('open');
+  }
+});
+
+document.getElementById('account-cancel').addEventListener('click', resetAccountForm);
+
+document.getElementById('account-submit').addEventListener('click', async ()=>{
+  const name = document.getElementById('account-name').value.trim();
+  const type = document.getElementById('account-type').value;
+  const startingBalance = parseFloat(document.getElementById('account-balance').value) || 0;
+  if(!name) return;
+
+  if(editingAccountId){
+    const { data, error } = await sb.from('accounts')
+      .update({ name, type, starting_balance: startingBalance })
+      .eq('id', editingAccountId).select().single();
+
+    if(error){ alert(error.message); return; }
+    const idx = accounts.findIndex(a => a.id === editingAccountId);
+    if(idx > -1){ accounts[idx] = { id:data.id, name:data.name, type:data.type, startingBalance:Number(data.starting_balance), color:data.color }; }
+    resetAccountForm();
+    renderAll();
+    return;
+  }
+
+  const color = swatchColors[accounts.length % swatchColors.length];
+  const { data, error } = await sb.from('accounts').insert({
+    user_id: currentUser.id, name, type, starting_balance: startingBalance, color
+  }).select().single();
+
+  if(error){ alert(error.message); return; }
+  accounts.push({ id:data.id, name:data.name, type:data.type, startingBalance:Number(data.starting_balance), color:data.color });
+  resetAccountForm();
+  renderAll();
+});
+
 // ================= Render all =================
 function renderAll(){
   renderCatOptions();
+  renderAccountOptions();
   renderDashboard();
   renderTransactions();
   renderCategories();
   renderBudgetCatOptions();
   renderBudgets();
   renderGoals();
+  renderAccounts();
 }
 renderSwatchPicker();
 </script>
