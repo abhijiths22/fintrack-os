@@ -359,6 +359,17 @@
           <button class="btn" id="tx-cancel" style="display:none;">Cancel</button>
         </div>
       </div>
+      <div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:center;">
+        <input type="text" id="tx-search" placeholder="Search description..." style="flex:1; min-width:180px;">
+        <select id="filter-account" style="width:150px;"><option value="">All accounts</option></select>
+        <select id="filter-cat" style="width:150px;"><option value="">All categories</option></select>
+        <select id="filter-type" style="width:130px;">
+          <option value="">All types</option>
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+        <button class="btn" id="filter-clear">Clear filters</button>
+      </div>
       <table>
         <thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th class="right">Amount</th><th></th></tr></thead>
         <tbody id="tx-list"></tbody>
@@ -480,6 +491,10 @@ let editingBudgetId = null;
 let editingGoalId = null;
 let editingAccountId = null;
 let editingRecurringId = null;
+let filterText = '';
+let filterAccount = '';
+let filterCat = '';
+let filterType = '';
 
 function fmt(n){
   const sign = n < 0 ? '-' : '';
@@ -767,14 +782,34 @@ function renderDashboard(){
 // ================= Render: Transactions =================
 function renderCatOptions(){
   document.getElementById('tx-cat').innerHTML = categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  const filterCatSel = document.getElementById('filter-cat');
+  const keepCat = filterCatSel.value;
+  filterCatSel.innerHTML = '<option value="">All categories</option>' + categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  filterCatSel.value = keepCat;
 }
 function renderAccountOptions(){
   document.getElementById('tx-account').innerHTML = accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  const filterAccSel = document.getElementById('filter-account');
+  const keepAcc = filterAccSel.value;
+  filterAccSel.innerHTML = '<option value="">All accounts</option>' + accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  filterAccSel.value = keepAcc;
 }
 
 function renderTransactions(){
-  document.getElementById('tx-count-sub').textContent = transactions.length + ' total';
-  document.getElementById('tx-list').innerHTML = transactions.map(t=>{
+  const filtered = transactions.filter(t=>{
+    if(filterText && !t.desc.toLowerCase().includes(filterText.toLowerCase())) return false;
+    if(filterAccount && t.accountId !== filterAccount) return false;
+    if(filterCat && t.catId !== filterCat) return false;
+    if(filterType && t.type !== filterType) return false;
+    return true;
+  });
+
+  const hasFilters = filterText || filterAccount || filterCat || filterType;
+  document.getElementById('tx-count-sub').textContent = hasFilters
+    ? filtered.length + ' of ' + transactions.length + ' shown'
+    : transactions.length + ' total';
+
+  document.getElementById('tx-list').innerHTML = filtered.map(t=>{
     const c = catById(t.catId);
     const a = accountById(t.accountId);
     const sign = t.type==='income' ? '+' : '-';
@@ -787,7 +822,7 @@ function renderTransactions(){
       <td class="right mono ${cls}">${sign}${fmt(t.amount)}</td>
       <td class="right"><div class="tx-actions"><button class="icon-btn" data-id="${t.id}" data-action="edit">edit</button> <button class="icon-btn danger" data-id="${t.id}" data-action="remove">remove</button></div></td>
     </tr>`;
-  }).join('') || '<tr><td class="empty" colspan="6">No transactions yet. Add your first one above.</td></tr>';
+  }).join('') || `<tr><td class="empty" colspan="6">${hasFilters ? 'No transactions match your filters.' : 'No transactions yet. Add your first one above.'}</td></tr>`;
 
   document.querySelectorAll('#tx-list .icon-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -812,6 +847,31 @@ function renderTransactions(){
     });
   });
 }
+
+document.getElementById('tx-search').addEventListener('input', (e)=>{
+  filterText = e.target.value;
+  renderTransactions();
+});
+document.getElementById('filter-account').addEventListener('change', (e)=>{
+  filterAccount = e.target.value;
+  renderTransactions();
+});
+document.getElementById('filter-cat').addEventListener('change', (e)=>{
+  filterCat = e.target.value;
+  renderTransactions();
+});
+document.getElementById('filter-type').addEventListener('change', (e)=>{
+  filterType = e.target.value;
+  renderTransactions();
+});
+document.getElementById('filter-clear').addEventListener('click', ()=>{
+  filterText = ''; filterAccount = ''; filterCat = ''; filterType = '';
+  document.getElementById('tx-search').value = '';
+  document.getElementById('filter-account').value = '';
+  document.getElementById('filter-cat').value = '';
+  document.getElementById('filter-type').value = '';
+  renderTransactions();
+});
 
 document.getElementById('toggle-form').addEventListener('click', ()=>{
   const card = document.getElementById('tx-form-card');
