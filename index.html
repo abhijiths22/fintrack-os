@@ -157,6 +157,17 @@
   .budget-cat-name{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; }
   .budget-figures{ font-size:13px; }
   .budget-figures .over{ color:var(--coral); }
+  .goal-card{ background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:10px; }
+  .goal-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+  .goal-name{ font-size:14px; font-weight:600; }
+  .goal-date{ font-size:11px; color:var(--text-muted); margin-top:3px; }
+  .goal-figures{ font-size:13px; text-align:right; }
+  .goal-pct{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+  .goal-complete{ color:var(--teal); }
+  .goal-actions-row{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .add-funds-row{ display:flex; gap:6px; align-items:center; }
+  .add-funds-row input{ width:100px; padding:6px 8px; }
+  .add-funds-row .btn{ padding:6px 12px; font-size:12px; }
 </style>
 </head>
 <body>
@@ -202,6 +213,7 @@
       <button class="nav-item" data-view="transactions"><span class="dot"></span>Transactions</button>
       <button class="nav-item" data-view="categories"><span class="dot"></span>Categories</button>
       <button class="nav-item" data-view="budgets"><span class="dot"></span>Budgets</button>
+      <button class="nav-item" data-view="goals"><span class="dot"></span>Goals</button>
     </div>
     <div class="sidebar-foot">
       <button class="btn" id="sign-out-btn">Sign out</button>
@@ -290,6 +302,24 @@
       </div>
       <div id="budget-list"></div>
     </div>
+
+    <!-- GOALS -->
+    <div class="view" id="view-goals">
+      <div class="header-row">
+        <div><h1>Goals</h1><div class="subtitle">Savings targets you're working toward</div></div>
+        <button class="btn btn-primary" id="toggle-goal-form">+ New goal</button>
+      </div>
+      <div class="form-card" id="goal-form-card">
+        <div class="form-grid" style="grid-template-columns:1.4fr 1fr 1fr auto auto;">
+          <div class="field"><label>Goal name</label><input type="text" id="goal-name" placeholder="e.g. Goa trip"></div>
+          <div class="field"><label>Target amount</label><input type="number" id="goal-target" placeholder="0.00" step="0.01"></div>
+          <div class="field"><label>Target date (optional)</label><input type="date" id="goal-date"></div>
+          <button class="btn btn-primary" id="goal-submit">Create goal</button>
+          <button class="btn" id="goal-cancel" style="display:none;">Cancel</button>
+        </div>
+      </div>
+      <div id="goal-list"></div>
+    </div>
   </div>
 </div>
 
@@ -311,12 +341,14 @@ const defaultCategories = [
 let categories = [];
 let transactions = [];
 let budgets = [];
+let goals = [];
 let selectedSwatch = swatchColors[0];
 let authMode = 'signin'; // or 'signup'
 let currentUser = null;
 let editingTxId = null;
 let editingCatId = null;
 let editingBudgetId = null;
+let editingGoalId = null;
 
 function fmt(n){
   const sign = n < 0 ? '-' : '';
@@ -450,6 +482,9 @@ async function loadEverything(){
 
   const { data: bgs } = await sb.from('budgets').select('*');
   budgets = (bgs || []).map(b => ({ id:b.id, catId:b.category_id, limit:Number(b.monthly_limit) }));
+
+  const { data: gls } = await sb.from('goals').select('*').order('created_at');
+  goals = (gls || []).map(g => ({ id:g.id, name:g.name, target:Number(g.target_amount), saved:Number(g.saved_amount), date:g.target_date }));
 
   renderAll();
   loadedForUserId = userIdAtStart;
@@ -825,6 +860,135 @@ document.getElementById('budget-submit').addEventListener('click', async ()=>{
   renderAll();
 });
 
+// ================= Goals =================
+function fmtDate(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+}
+
+function renderGoals(){
+  document.getElementById('goal-list').innerHTML = goals.map(g=>{
+    const pct = Math.min(100, (g.saved / g.target) * 100);
+    const complete = g.saved >= g.target;
+    const dateLabel = g.date ? ('Target: ' + fmtDate(g.date)) : 'No target date';
+    return `<div class="goal-card">
+      <div class="goal-top">
+        <div>
+          <div class="goal-name">${g.name}${complete ? ' <span class="goal-complete">&check; reached</span>' : ''}</div>
+          <div class="goal-date">${dateLabel}</div>
+        </div>
+        <div>
+          <div class="goal-figures mono">${fmt(g.saved)} / ${fmt(g.target)}</div>
+          <div class="goal-pct">${pct.toFixed(0)}%</div>
+        </div>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${complete ? 'var(--teal)' : 'var(--amber)'};"></div></div>
+      <div class="goal-actions-row">
+        <div class="add-funds-row">
+          <input type="number" placeholder="Add amount" step="0.01" class="add-funds-input" data-goal-id="${g.id}">
+          <button class="btn" data-goal-id="${g.id}" data-action="addfunds">Add</button>
+        </div>
+        <div class="cat-actions">
+          <button class="icon-btn" data-id="${g.id}" data-action="edit">edit</button>
+          <button class="icon-btn danger" data-id="${g.id}" data-action="remove">remove</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty">No goals yet. Create one above to start tracking savings.</div>';
+
+  document.querySelectorAll('#goal-list .icon-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.id;
+      if(btn.dataset.action === 'remove'){
+        await sb.from('goals').delete().eq('id', id);
+        goals = goals.filter(g => g.id !== id);
+        renderAll();
+      } else {
+        const g = goals.find(gl => gl.id === id);
+        if(!g) return;
+        editingGoalId = id;
+        document.getElementById('goal-name').value = g.name;
+        document.getElementById('goal-target').value = g.target;
+        document.getElementById('goal-date').value = g.date || '';
+        document.getElementById('goal-submit').textContent = 'Save changes';
+        document.getElementById('goal-cancel').style.display = 'inline-block';
+        document.getElementById('goal-form-card').classList.add('open');
+      }
+    });
+  });
+
+  document.querySelectorAll('#goal-list [data-action="addfunds"]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const goalId = btn.dataset.goalId;
+      const input = document.querySelector(`.add-funds-input[data-goal-id="${goalId}"]`);
+      const amt = parseFloat(input.value);
+      if(!amt || amt <= 0) return;
+      const g = goals.find(x => x.id === goalId);
+      if(!g) return;
+      const newSaved = g.saved + amt;
+
+      const { data, error } = await sb.from('goals').update({ saved_amount: newSaved }).eq('id', goalId).select().single();
+      if(error){ alert(error.message); return; }
+      g.saved = Number(data.saved_amount);
+      renderGoals();
+    });
+  });
+}
+
+function resetGoalForm(){
+  editingGoalId = null;
+  document.getElementById('goal-name').value = '';
+  document.getElementById('goal-target').value = '';
+  document.getElementById('goal-date').value = '';
+  document.getElementById('goal-submit').textContent = 'Create goal';
+  document.getElementById('goal-cancel').style.display = 'none';
+  document.getElementById('goal-form-card').classList.remove('open');
+}
+
+document.getElementById('toggle-goal-form').addEventListener('click', ()=>{
+  const card = document.getElementById('goal-form-card');
+  if(card.classList.contains('open')){
+    resetGoalForm();
+  } else {
+    resetGoalForm();
+    card.classList.add('open');
+  }
+});
+
+document.getElementById('goal-cancel').addEventListener('click', resetGoalForm);
+
+document.getElementById('goal-submit').addEventListener('click', async ()=>{
+  const name = document.getElementById('goal-name').value.trim();
+  const target = parseFloat(document.getElementById('goal-target').value);
+  const dateVal = document.getElementById('goal-date').value || null;
+  if(!name || !target || target <= 0) return;
+
+  if(editingGoalId){
+    const { data, error } = await sb.from('goals')
+      .update({ name, target_amount: target, target_date: dateVal })
+      .eq('id', editingGoalId).select().single();
+
+    if(error){ alert(error.message); return; }
+    const idx = goals.findIndex(g => g.id === editingGoalId);
+    if(idx > -1){
+      goals[idx] = { id:data.id, name:data.name, target:Number(data.target_amount), saved:Number(data.saved_amount), date:data.target_date };
+    }
+    resetGoalForm();
+    renderAll();
+    return;
+  }
+
+  const { data, error } = await sb.from('goals').insert({
+    user_id: currentUser.id, name, target_amount: target, target_date: dateVal
+  }).select().single();
+
+  if(error){ alert(error.message); return; }
+  goals.push({ id:data.id, name:data.name, target:Number(data.target_amount), saved:Number(data.saved_amount), date:data.target_date });
+  resetGoalForm();
+  renderAll();
+});
+
 // ================= Render all =================
 function renderAll(){
   renderCatOptions();
@@ -833,6 +997,7 @@ function renderAll(){
   renderCategories();
   renderBudgetCatOptions();
   renderBudgets();
+  renderGoals();
 }
 renderSwatchPicker();
 </script>
