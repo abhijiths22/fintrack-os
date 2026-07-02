@@ -152,6 +152,11 @@
   .icon-btn:hover{ background:var(--surface-hover); color:var(--text-primary); }
   .icon-btn.danger:hover{ color:var(--coral); border-color:var(--coral); }
   .tx-actions{ display:flex; gap:6px; justify-content:flex-end; }
+  .budget-card{ background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:10px; }
+  .budget-top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .budget-cat-name{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; }
+  .budget-figures{ font-size:13px; }
+  .budget-figures .over{ color:var(--coral); }
 </style>
 </head>
 <body>
@@ -196,6 +201,7 @@
       <button class="nav-item active" data-view="dashboard"><span class="dot"></span>Dashboard</button>
       <button class="nav-item" data-view="transactions"><span class="dot"></span>Transactions</button>
       <button class="nav-item" data-view="categories"><span class="dot"></span>Categories</button>
+      <button class="nav-item" data-view="budgets"><span class="dot"></span>Budgets</button>
     </div>
     <div class="sidebar-foot">
       <button class="btn" id="sign-out-btn">Sign out</button>
@@ -267,6 +273,23 @@
       </div>
       <div class="cat-grid" id="cat-grid"></div>
     </div>
+
+    <!-- BUDGETS -->
+    <div class="view" id="view-budgets">
+      <div class="header-row">
+        <div><h1>Budgets</h1><div class="subtitle">Monthly spending limits by category</div></div>
+        <button class="btn btn-primary" id="toggle-budget-form">+ Set budget</button>
+      </div>
+      <div class="form-card" id="budget-form-card">
+        <div class="form-grid" style="grid-template-columns:1.4fr 1fr auto auto;">
+          <div class="field"><label>Category</label><select id="budget-cat"></select></div>
+          <div class="field"><label>Monthly limit</label><input type="number" id="budget-amount" placeholder="0.00" step="0.01"></div>
+          <button class="btn btn-primary" id="budget-submit">Set budget</button>
+          <button class="btn" id="budget-cancel" style="display:none;">Cancel</button>
+        </div>
+      </div>
+      <div id="budget-list"></div>
+    </div>
   </div>
 </div>
 
@@ -287,11 +310,13 @@ const defaultCategories = [
 
 let categories = [];
 let transactions = [];
+let budgets = [];
 let selectedSwatch = swatchColors[0];
 let authMode = 'signin'; // or 'signup'
 let currentUser = null;
 let editingTxId = null;
 let editingCatId = null;
+let editingBudgetId = null;
 
 function fmt(n){
   const sign = n < 0 ? '-' : '';
@@ -422,6 +447,9 @@ async function loadEverything(){
   transactions = (txs || []).map(t => ({
     id:t.id, date:t.date, desc:t.description, catId:t.category_id, type:t.type, amount:Number(t.amount)
   }));
+
+  const { data: bgs } = await sb.from('budgets').select('*');
+  budgets = (bgs || []).map(b => ({ id:b.id, catId:b.category_id, limit:Number(b.monthly_limit) }));
 
   renderAll();
   loadedForUserId = userIdAtStart;
@@ -676,12 +704,135 @@ document.getElementById('cat-submit').addEventListener('click', async ()=>{
   renderAll();
 });
 
+// ================= Budgets =================
+function currentMonthKey(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+
+function monthSpentByCategory(){
+  const key = currentMonthKey();
+  const byCat = {};
+  transactions.filter(t=>t.type==='expense' && t.date.slice(0,7)===key).forEach(t=>{
+    byCat[t.catId] = (byCat[t.catId]||0) + t.amount;
+  });
+  return byCat;
+}
+
+function renderBudgetCatOptions(){
+  const budgetedCatIds = new Set(budgets.map(b=>b.catId));
+  const available = editingBudgetId
+    ? categories
+    : categories.filter(c => !budgetedCatIds.has(c.id));
+  document.getElementById('budget-cat').innerHTML = available.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+function renderBudgets(){
+  const spent = monthSpentByCategory();
+  document.getElementById('budget-list').innerHTML = budgets.map(b=>{
+    const c = catById(b.catId);
+    if(!c) return '';
+    const spentAmt = spent[b.catId] || 0;
+    const pct = Math.min(100, (spentAmt / b.limit) * 100);
+    const over = spentAmt > b.limit;
+    return `<div class="budget-card">
+      <div class="budget-top">
+        <div class="budget-cat-name"><span class="cat-dot" style="background:${c.color};"></span>${c.name}</div>
+        <div class="budget-figures mono">
+          <span class="${over ? 'over' : ''}">${fmt(spentAmt)}</span> / ${fmt(b.limit)}
+        </div>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%; background:${over ? 'var(--coral)' : c.color};"></div>
+      </div>
+      <div class="cat-actions" style="margin-top:10px;">
+        <button class="icon-btn" data-id="${b.id}" data-action="edit">edit</button>
+        <button class="icon-btn danger" data-id="${b.id}" data-action="remove">remove</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty">No budgets set yet. Pick a category above to set a monthly limit.</div>';
+
+  document.querySelectorAll('#budget-list .icon-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.id;
+      if(btn.dataset.action === 'remove'){
+        await sb.from('budgets').delete().eq('id', id);
+        budgets = budgets.filter(b => b.id !== id);
+        renderAll();
+      } else {
+        const b = budgets.find(bg => bg.id === id);
+        if(!b) return;
+        editingBudgetId = id;
+        renderBudgetCatOptions();
+        document.getElementById('budget-cat').value = b.catId;
+        document.getElementById('budget-cat').disabled = true;
+        document.getElementById('budget-amount').value = b.limit;
+        document.getElementById('budget-submit').textContent = 'Save changes';
+        document.getElementById('budget-cancel').style.display = 'inline-block';
+        document.getElementById('budget-form-card').classList.add('open');
+      }
+    });
+  });
+}
+
+function resetBudgetForm(){
+  editingBudgetId = null;
+  document.getElementById('budget-amount').value = '';
+  document.getElementById('budget-cat').disabled = false;
+  document.getElementById('budget-submit').textContent = 'Set budget';
+  document.getElementById('budget-cancel').style.display = 'none';
+  document.getElementById('budget-form-card').classList.remove('open');
+  renderBudgetCatOptions();
+}
+
+document.getElementById('toggle-budget-form').addEventListener('click', ()=>{
+  const card = document.getElementById('budget-form-card');
+  if(card.classList.contains('open')){
+    resetBudgetForm();
+  } else {
+    resetBudgetForm();
+    card.classList.add('open');
+  }
+});
+
+document.getElementById('budget-cancel').addEventListener('click', resetBudgetForm);
+
+document.getElementById('budget-submit').addEventListener('click', async ()=>{
+  const catId = document.getElementById('budget-cat').value;
+  const limit = parseFloat(document.getElementById('budget-amount').value);
+  if(!catId || !limit || limit <= 0) return;
+
+  if(editingBudgetId){
+    const { data, error } = await sb.from('budgets')
+      .update({ monthly_limit: limit })
+      .eq('id', editingBudgetId).select().single();
+
+    if(error){ alert(error.message); return; }
+    const idx = budgets.findIndex(b => b.id === editingBudgetId);
+    if(idx > -1){ budgets[idx] = { id:data.id, catId:data.category_id, limit:Number(data.monthly_limit) }; }
+    resetBudgetForm();
+    renderAll();
+    return;
+  }
+
+  const { data, error } = await sb.from('budgets').insert({
+    user_id: currentUser.id, category_id: catId, monthly_limit: limit
+  }).select().single();
+
+  if(error){ alert(error.message); return; }
+  budgets.push({ id:data.id, catId:data.category_id, limit:Number(data.monthly_limit) });
+  resetBudgetForm();
+  renderAll();
+});
+
 // ================= Render all =================
 function renderAll(){
   renderCatOptions();
   renderDashboard();
   renderTransactions();
   renderCategories();
+  renderBudgetCatOptions();
+  renderBudgets();
 }
 renderSwatchPicker();
 </script>
