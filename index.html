@@ -195,6 +195,17 @@
   .trend-bar-fill.income{ background:var(--teal); }
   .trend-bar-fill.expense{ background:var(--coral); }
   .trend-net{ width:110px; text-align:right; font-size:13px; flex-shrink:0; }
+  .chat-container{
+    background:var(--surface-1); border:1px solid var(--border); border-radius:12px;
+    height:440px; overflow-y:auto; padding:16px; display:flex; flex-direction:column;
+    gap:12px; margin-bottom:14px;
+  }
+  .chat-bubble{ max-width:75%; padding:10px 14px; border-radius:10px; font-size:13px; line-height:1.55; }
+  .chat-bubble.user{ align-self:flex-end; background:var(--amber); color:#2A1E08; }
+  .chat-bubble.assistant{ align-self:flex-start; background:var(--surface-2); color:var(--text-primary); }
+  .chat-input-row{ display:flex; gap:10px; }
+  .chat-input-row input{ flex:1; }
+  .chat-empty{ color:var(--text-muted); font-size:13px; text-align:center; margin:auto; max-width:320px; line-height:1.6; }
 </style>
 </head>
 <body>
@@ -244,6 +255,7 @@
       <button class="nav-item" data-view="categories"><span class="dot"></span>Categories</button>
       <button class="nav-item" data-view="budgets"><span class="dot"></span>Budgets</button>
       <button class="nav-item" data-view="goals"><span class="dot"></span>Goals</button>
+      <button class="nav-item" data-view="copilot"><span class="dot"></span>Copilot</button>
     </div>
     <div class="sidebar-foot">
       <button class="btn" id="sign-out-btn">Sign out</button>
@@ -457,6 +469,18 @@
         </div>
       </div>
       <div id="goal-list"></div>
+    </div>
+
+    <!-- COPILOT -->
+    <div class="view" id="view-copilot">
+      <div class="header-row">
+        <div><h1>Copilot</h1><div class="subtitle">Ask questions about your money, grounded in your real data</div></div>
+      </div>
+      <div class="chat-container" id="copilot-chat"></div>
+      <div class="chat-input-row">
+        <input type="text" id="copilot-input" placeholder="e.g. Can I afford a ₹5,000 dinner this week?">
+        <button class="btn btn-primary" id="copilot-send">Send</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1599,6 +1623,114 @@ document.getElementById('report-next-month').addEventListener('click', ()=>{
   renderReports();
 });
 
+// ================= Copilot =================
+let copilotMessages = [];
+
+function escapeHtml(str){
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function buildFinancialContext(){
+  const lines = [];
+  const d = new Date();
+  const curKey = monthKey(d.getFullYear(), d.getMonth() + 1);
+  const thisMonthTx = transactions.filter(t => t.date.slice(0,7) === curKey);
+  const income = thisMonthTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expense = thisMonthTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+
+  lines.push(`Today's date: ${todayStr()}`);
+  lines.push(`This month (${monthLabel(d.getFullYear(), d.getMonth()+1)}): Income ${fmt(income)}, Expenses ${fmt(expense)}, Net ${fmt(income-expense)}`);
+
+  lines.push('\nAccounts:');
+  accounts.forEach(a => lines.push(`- ${a.name} (${accountTypeLabels[a.type] || a.type}): ${fmt(accountBalance(a.id))}`));
+
+  if(budgets.length){
+    lines.push('\nBudgets this month:');
+    budgets.forEach(b => {
+      const c = catById(b.catId);
+      const spent = thisMonthTx.filter(t => t.type==='expense' && t.catId===b.catId).reduce((s,t)=>s+t.amount,0);
+      lines.push(`- ${c ? c.name : '?'}: ${fmt(spent)} spent of ${fmt(b.limit)} limit`);
+    });
+  }
+
+  if(goals.length){
+    lines.push('\nSavings goals:');
+    goals.forEach(g => lines.push(`- ${g.name}: ${fmt(g.saved)} saved of ${fmt(g.target)} target${g.date ? (', target date ' + fmtDate(g.date)) : ''}`));
+  }
+
+  if(recurring.length){
+    lines.push('\nRecurring bills/income:');
+    recurring.forEach(r => lines.push(`- ${r.desc}: ${fmt(r.amount)} ${r.frequency}, next due ${fmtDate(r.nextDue)}`));
+  }
+
+  lines.push('\nMost recent transactions:');
+  transactions.slice(0,15).forEach(t => {
+    const c = catById(t.catId);
+    const a = accountById(t.accountId);
+    lines.push(`- ${t.date} | ${t.desc} | ${c ? c.name : '-'} | ${a ? a.name : '-'} | ${t.type==='income' ? '+' : '-'}${fmt(t.amount)}`);
+  });
+
+  return lines.join('\n');
+}
+
+function renderCopilot(){
+  const container = document.getElementById('copilot-chat');
+  if(copilotMessages.length === 0){
+    container.innerHTML = '<div class="chat-empty">Ask me anything about your money — spending patterns, whether you can afford something, budget status, or progress on your goals.</div>';
+    return;
+  }
+  container.innerHTML = copilotMessages.map(m =>
+    `<div class="chat-bubble ${m.role}">${escapeHtml(m.text).replace(/\n/g,'<br>')}</div>`
+  ).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendCopilotMessage(){
+  const input = document.getElementById('copilot-input');
+  const question = input.value.trim();
+  if(!question) return;
+
+  copilotMessages.push({ role:'user', text:question });
+  input.value = '';
+  renderCopilot();
+
+  const sendBtn = document.getElementById('copilot-send');
+  sendBtn.disabled = true;
+  copilotMessages.push({ role:'assistant', text:'Thinking...' });
+  renderCopilot();
+
+  try{
+    const context = buildFinancialContext();
+    const { data, error } = await sb.functions.invoke('dynamic-api', { body: { question, context } });
+    copilotMessages.pop();
+    if(error){
+      console.error('Copilot function error:', error, error.context);
+      let detail = error.message || 'unknown error';
+      try {
+        if(error.context && typeof error.context.json === 'function'){
+          const body = await error.context.json();
+          if(body && body.error) detail = body.error;
+        }
+      } catch(e) { /* ignore parse failure */ }
+      copilotMessages.push({ role:'assistant', text:'Error reaching the copilot: ' + detail + ' (check browser console / Edge Function logs for more)' });
+    } else {
+      copilotMessages.push({ role:'assistant', text: (data && data.answer) || "Sorry, I couldn't generate a response." });
+    }
+  } catch(err){
+    copilotMessages.pop();
+    console.error('Copilot unexpected error:', err);
+    copilotMessages.push({ role:'assistant', text:'Unexpected error: ' + err.message });
+  }
+
+  sendBtn.disabled = false;
+  renderCopilot();
+}
+
+document.getElementById('copilot-send').addEventListener('click', sendCopilotMessage);
+document.getElementById('copilot-input').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') sendCopilotMessage();
+});
+
 // ================= Render all =================
 function renderAll(){
   renderCatOptions();
@@ -1613,6 +1745,7 @@ function renderAll(){
   renderGoals();
   renderAccounts();
   renderReports();
+  renderCopilot();
 }
 renderSwatchPicker();
 </script>
