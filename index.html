@@ -313,6 +313,18 @@
   .chat-input-row input{ flex:1; }
   .chat-empty{ color:var(--text-muted); font-size:13px; text-align:center; margin:auto; max-width:320px; line-height:1.6; }
 
+  .settings-section{ background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:22px 24px; margin-bottom:18px; }
+  .settings-section-title{ font-family:'Fraunces', serif; font-weight:600; font-size:16px; margin-bottom:14px; }
+  .settings-row{ display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-top:1px solid var(--border-soft); }
+  .settings-row:first-of-type{ border-top:none; padding-top:0; }
+  .settings-row-label{ font-size:12px; color:var(--text-secondary); }
+  .settings-row-value{ font-size:14px; font-weight:500; margin-top:2px; }
+  .settings-row-desc{ font-size:12.5px; color:var(--text-secondary); line-height:1.6; }
+  .settings-msg{ font-size:12.5px; margin-top:10px; }
+  .settings-msg.success{ color:var(--teal); }
+  .settings-msg.error{ color:var(--coral); }
+  .danger-zone{ border-color:#E8CFC9; }
+
   /* ================= Mobile ================= */
   @media (max-width: 768px){
     #app-screen.active{ flex-direction:column; }
@@ -402,6 +414,7 @@
       <button class="nav-item" data-view="budgets"><i data-lucide="pie-chart"></i><span>Budgets</span></button>
       <button class="nav-item" data-view="goals"><i data-lucide="target"></i><span>Goals</span></button>
       <button class="nav-item" data-view="copilot"><i data-lucide="sparkles"></i><span>Copilot</span></button>
+      <button class="nav-item" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></button>
     </div>
     <div class="sidebar-foot">
       <button class="btn" id="sign-out-btn"><i data-lucide="log-out"></i> Sign out</button>
@@ -663,6 +676,58 @@
       <div class="chat-input-row">
         <input type="text" id="copilot-input" placeholder="e.g. Can I afford a ₹5,000 dinner this week?">
         <button class="btn btn-primary" id="copilot-send"><i data-lucide="send"></i>Send</button>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="view" id="view-settings">
+      <div class="header-row">
+        <div><h1>Settings</h1><div class="subtitle">Your account and data</div></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Profile</div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Email</div>
+            <div class="settings-row-value" id="settings-email">—</div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Member since</div>
+            <div class="settings-row-value" id="settings-since">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Change password</div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr auto; align-items:end;">
+          <div class="field"><label>New password</label><input type="password" id="settings-new-password" placeholder="At least 6 characters"></div>
+          <div class="field"><label>Confirm new password</label><input type="password" id="settings-confirm-password" placeholder="Re-enter password"></div>
+          <button class="btn btn-primary" id="settings-password-submit">Update password</button>
+        </div>
+        <div class="settings-msg" id="settings-password-msg"></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Export your data</div>
+        <div class="settings-row-desc">Download a copy of your data any time — no strings attached.</div>
+        <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+          <button class="btn" id="export-csv-btn"><i data-lucide="file-down"></i>Export transactions (CSV)</button>
+          <button class="btn" id="export-json-btn"><i data-lucide="download"></i>Export full backup (JSON)</button>
+        </div>
+      </div>
+
+      <div class="settings-section danger-zone">
+        <div class="settings-section-title" style="color:var(--coral);">Danger zone</div>
+        <div class="settings-row-desc">Deleting your account permanently removes all your accounts, transactions, categories, budgets, goals, and recurring items. This cannot be undone.</div>
+        <div style="display:flex; gap:10px; margin-top:14px; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="delete-confirm-input" placeholder="Type DELETE to confirm" style="max-width:220px;">
+          <button class="btn" id="delete-account-btn" style="border-color:var(--coral); color:var(--coral);" disabled>Delete my account</button>
+        </div>
+        <div class="settings-msg" id="settings-delete-msg"></div>
       </div>
     </div>
   </div>
@@ -2151,6 +2216,98 @@ document.getElementById('copilot-input').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter') sendCopilotMessage();
 });
 
+// ================= Settings =================
+function renderSettings(){
+  if(!currentUser) return;
+  document.getElementById('settings-email').textContent = currentUser.email;
+  const created = currentUser.created_at ? new Date(currentUser.created_at) : null;
+  document.getElementById('settings-since').textContent = created
+    ? created.toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })
+    : '—';
+}
+
+document.getElementById('settings-password-submit').addEventListener('click', async ()=>{
+  const msg = document.getElementById('settings-password-msg');
+  const pw = document.getElementById('settings-new-password').value;
+  const confirmPw = document.getElementById('settings-confirm-password').value;
+  msg.className = 'settings-msg';
+  msg.textContent = '';
+
+  if(pw.length < 6){ msg.textContent = 'Password must be at least 6 characters.'; msg.className = 'settings-msg error'; return; }
+  if(pw !== confirmPw){ msg.textContent = "Passwords don't match."; msg.className = 'settings-msg error'; return; }
+
+  const btn = document.getElementById('settings-password-submit');
+  btn.disabled = true;
+  const { error } = await sb.auth.updateUser({ password: pw });
+  btn.disabled = false;
+
+  if(error){ msg.textContent = error.message; msg.className = 'settings-msg error'; return; }
+  document.getElementById('settings-new-password').value = '';
+  document.getElementById('settings-confirm-password').value = '';
+  msg.textContent = 'Password updated successfully.';
+  msg.className = 'settings-msg success';
+});
+
+function downloadFile(filename, content, mime){
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(val){
+  const s = String(val ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+
+document.getElementById('export-csv-btn').addEventListener('click', ()=>{
+  const rows = [['Date','Description','Account','Category','Type','Amount']];
+  transactions.forEach(t=>{
+    const c = catById(t.catId); const a = accountById(t.accountId);
+    rows.push([t.date, t.desc, a ? a.name : '', c ? c.name : '', t.type, t.amount]);
+  });
+  const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  downloadFile(`kairn-transactions-${todayStr()}.csv`, csv, 'text/csv');
+});
+
+document.getElementById('export-json-btn').addEventListener('click', ()=>{
+  const backup = {
+    exported_at: new Date().toISOString(),
+    accounts, categories, transactions, budgets, goals, recurring
+  };
+  downloadFile(`kairn-backup-${todayStr()}.json`, JSON.stringify(backup, null, 2), 'application/json');
+});
+
+document.getElementById('delete-confirm-input').addEventListener('input', (e)=>{
+  document.getElementById('delete-account-btn').disabled = e.target.value.trim() !== 'DELETE';
+});
+
+document.getElementById('delete-account-btn').addEventListener('click', async ()=>{
+  const msg = document.getElementById('settings-delete-msg');
+  msg.className = 'settings-msg'; msg.textContent = '';
+
+  if(!confirm('This permanently deletes your account and all data. This cannot be undone. Continue?')) return;
+
+  const btn = document.getElementById('delete-account-btn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting...';
+
+  const { error } = await sb.functions.invoke('bright-function', { body: {} });
+
+  if(error){
+    msg.textContent = 'Something went wrong deleting your account. Please try again or contact support.';
+    msg.className = 'settings-msg error';
+    btn.disabled = false;
+    btn.textContent = 'Delete my account';
+    console.error('Delete account error:', error);
+    return;
+  }
+
+  await sb.auth.signOut();
+});
+
 // ================= Render all =================
 function renderAll(){
   renderCatOptions();
@@ -2166,6 +2323,7 @@ function renderAll(){
   renderAccounts();
   renderReports();
   renderCopilot();
+  renderSettings();
   if(window.lucide) lucide.createIcons();
 }
 renderSwatchPicker();
