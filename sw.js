@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kairn-v1';
+const CACHE_NAME = 'kairn-v2';
 
 // Files to cache for offline use
 const STATIC_ASSETS = [
