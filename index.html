@@ -342,15 +342,13 @@
       border-right:none; border-top:1px solid var(--border); gap:0;
     }
     .sidebar .brand, .sidebar .sidebar-foot, .sidebar .nav-divider, .sidebar .nav-section-label{ display:none; }
-    /* Only show second nav (manage) items hidden on mobile — show only primary nav */
-    .sidebar .nav:last-of-type{ display:none; }
-    .nav{ flex-direction:row; width:100%; gap:0; justify-content:space-around; }
-    .nav-item{
+    .sidebar .nav-secondary{ display:none; }
+    .nav-primary{ flex-direction:row; width:100%; gap:0; justify-content:space-around; }
+    .nav-primary .nav-item{
       flex-direction:column; gap:3px; padding:7px 6px; font-size:10px;
       width:auto; flex:1; text-align:center; white-space:nowrap;
     }
-    .nav-item svg{ width:19px; height:19px; }
-    .nav-section-label{ display:none; }
+    .nav-primary .nav-item svg{ width:19px; height:19px; }
 
     .main{ padding:20px 16px 92px; max-width:100%; }
     .header-row{ flex-wrap:wrap; gap:10px; }
@@ -489,7 +487,7 @@
       <div class="brand-name">Kairn</div>
       <div class="brand-tag" id="signed-in-email"></div>
     </div>
-    <div class="nav">
+    <div class="nav nav-primary">
       <button class="nav-item active" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></button>
       <button class="nav-item" data-view="transactions"><i data-lucide="list"></i><span>Transactions</span></button>
       <button class="nav-item" data-view="accounts"><i data-lucide="wallet"></i><span>Accounts</span></button>
@@ -498,7 +496,7 @@
     </div>
     <div class="nav-divider"></div>
     <div class="nav-section-label">Manage</div>
-    <div class="nav">
+    <div class="nav nav-secondary">
       <button class="nav-item" data-view="reports"><i data-lucide="bar-chart-3"></i><span>Reports</span></button>
       <button class="nav-item" data-view="budgets"><i data-lucide="pie-chart"></i><span>Budgets</span></button>
       <button class="nav-item" data-view="goals"><i data-lucide="target"></i><span>Goals</span></button>
