@@ -4,6 +4,21 @@
 <meta charset="UTF-8" />
 <title>Kairn</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- iOS PWA meta tags -->
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <meta name="apple-mobile-web-app-title" content="Kairn" />
+
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <!-- Splash screen color for iOS -->
+
+    <meta name="theme-color" content="#F9F8F6" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -2330,5 +2345,32 @@ renderSwatchPicker();
 if(window.lucide) lucide.createIcons();
 </script>
 
+<script>
+
+  if ("serviceWorker" in navigator) {
+
+    window.addEventListener("load", function () {
+
+      navigator.serviceWorker
+
+        .register("/sw.js")
+
+        .then(function (reg) {
+
+          console.log("Kairn SW registered:", reg.scope);
+
+        })
+
+        .catch(function (err) {
+
+          console.warn("Kairn SW registration failed:", err);
+
+        });
+
+    });
+
+  }
+
+</script>
 </body>
 </html>
