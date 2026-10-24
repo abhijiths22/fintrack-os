@@ -4,21 +4,6 @@
 <meta charset="UTF-8" />
 <title>Kairn</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="manifest" href="/manifest.json" />
-
-    <!-- iOS PWA meta tags -->
-
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-
-    <meta name="apple-mobile-web-app-title" content="Kairn" />
-
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-
-    <!-- Splash screen color for iOS -->
-
-    <meta name="theme-color" content="#F9F8F6" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -355,15 +340,17 @@
       position:fixed; bottom:0; left:0; right:0; width:100%; z-index:50;
       flex-direction:row; padding:6px 4px calc(6px + env(safe-area-inset-bottom));
       border-right:none; border-top:1px solid var(--border); gap:0;
-      overflow-x:auto; -webkit-overflow-scrolling:touch;
     }
-    .sidebar .brand, .sidebar .sidebar-foot{ display:none; }
-    .nav{ flex-direction:row; width:100%; gap:2px; }
+    .sidebar .brand, .sidebar .sidebar-foot, .sidebar .nav-divider, .sidebar .nav-section-label{ display:none; }
+    /* Only show second nav (manage) items hidden on mobile — show only primary nav */
+    .sidebar .nav:last-of-type{ display:none; }
+    .nav{ flex-direction:row; width:100%; gap:0; justify-content:space-around; }
     .nav-item{
-      flex-direction:column; gap:3px; padding:7px 10px; font-size:10px;
-      width:auto; flex-shrink:0; text-align:center; white-space:nowrap;
+      flex-direction:column; gap:3px; padding:7px 6px; font-size:10px;
+      width:auto; flex:1; text-align:center; white-space:nowrap;
     }
     .nav-item svg{ width:19px; height:19px; }
+    .nav-section-label{ display:none; }
 
     .main{ padding:20px 16px 92px; max-width:100%; }
     .header-row{ flex-wrap:wrap; gap:10px; }
@@ -375,6 +362,68 @@
     .chat-container{ height:calc(100vh - 340px); min-height:280px; }
     .auth-card{ width:calc(100vw - 48px); max-width:340px; }
   }
+
+  /* ── Nav divider & section label ── */
+  .nav-divider{ height:1px; background:var(--border); margin:12px 8px; }
+  .nav-section-label{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); padding:0 18px; margin-bottom:4px; }
+
+  /* ── Drawer (hamburger slide-in) ── */
+  #drawer-overlay{
+    display:none; position:fixed; inset:0; background:rgba(44,37,35,.35);
+    z-index:60; backdrop-filter:blur(2px);
+  }
+  #drawer-overlay.open{ display:block; }
+  .drawer{
+    position:fixed; top:0; right:0; bottom:0; width:260px;
+    background:var(--surface-1); border-left:1px solid var(--border);
+    z-index:70; padding:20px 16px; display:flex; flex-direction:column; gap:20px;
+    transform:translateX(100%); transition:transform .25s ease;
+  }
+  .drawer.open{ transform:translateX(0); }
+  .drawer-header{ display:flex; justify-content:space-between; align-items:center; padding:0 8px; }
+  .drawer-nav{ display:flex; flex-direction:column; gap:2px; flex:1; }
+  .drawer-nav-item{ font-size:14px !important; flex-direction:row !important; gap:10px !important; padding:10px 12px !important; text-align:left !important; }
+  .drawer-foot{ padding:0 8px; }
+
+  /* ── Debt tabs ── */
+  .debt-tabs{ display:flex; gap:4px; margin-bottom:20px; background:var(--surface-2); border-radius:9px; padding:4px; width:fit-content; }
+  .debt-tab{
+    padding:7px 20px; border-radius:7px; font-size:13px; font-weight:500;
+    background:none; border:none; color:var(--text-secondary); cursor:pointer; transition:background .15s, color .15s;
+  }
+  .debt-tab.active{ background:var(--surface-1); color:var(--text-primary); box-shadow:0 1px 4px rgba(44,37,35,.08); }
+  .debt-tab-content{ display:none; }
+  .debt-tab-content.active{ display:block; animation:fadeIn .2s ease; }
+
+  /* ── Debt cards ── */
+  .debt-card{
+    background:var(--surface-1); border:1px solid var(--border); border-radius:12px;
+    padding:16px 18px; margin-bottom:10px; transition:border-color .15s, box-shadow .15s;
+  }
+  .debt-card:hover{ border-color:#D6D0C4; box-shadow:0 2px 10px rgba(44,37,35,.05); }
+  .debt-card.owe{ border-left:3px solid var(--coral); }
+  .debt-card.owed{ border-left:3px solid var(--teal); }
+  .debt-card.paid{ opacity:.6; }
+  .debt-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
+  .debt-person{ font-size:15px; font-weight:600; }
+  .debt-meta{ font-size:12px; color:var(--text-muted); margin-top:3px; display:flex; gap:10px; flex-wrap:wrap; }
+  .debt-amount-col{ text-align:right; }
+  .debt-total{ font-size:16px; font-weight:700; font-family:"Fraunces",serif; }
+  .debt-remaining{ font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .debt-track{ height:7px; background:var(--surface-2); border-radius:4px; overflow:hidden; margin-bottom:12px; }
+  .debt-fill{ height:100%; border-radius:4px; transition:width .4s ease; }
+  .debt-actions-row{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  .debt-pay-row{ display:flex; gap:6px; align-items:center; }
+  .debt-pay-row input{ width:110px; padding:6px 8px; font-size:13px; }
+  .paid-badge{
+    display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
+    color:var(--teal); background:#EAEEE6; border-radius:5px; padding:3px 8px;
+  }
+  .overdue-badge{
+    display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
+    color:var(--coral); background:#F5EAE8; border-radius:5px; padding:3px 8px;
+  }
+
 </style>
 </head>
 <body>
@@ -410,9 +459,30 @@
 
 <!-- ================= APP SCREEN ================= -->
 <div id="app-screen">
+  <!-- Mobile top bar -->
   <div class="mobile-topbar">
     <div class="brand-name">Kairn</div>
-    <button class="icon-btn" id="mobile-sign-out-btn"><i data-lucide="log-out"></i></button>
+    <button class="icon-btn" id="hamburger-btn" aria-label="Open menu"><i data-lucide="menu"></i></button>
+  </div>
+
+  <!-- Hamburger drawer (secondary nav) -->
+  <div id="drawer-overlay"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div class="brand-name">Kairn</div>
+      <button class="icon-btn" id="drawer-close-btn"><i data-lucide="x"></i></button>
+    </div>
+    <div class="drawer-nav">
+      <button class="nav-item drawer-nav-item" data-view="reports"><i data-lucide="bar-chart-3"></i><span>Reports</span></button>
+      <button class="nav-item drawer-nav-item" data-view="budgets"><i data-lucide="pie-chart"></i><span>Budgets</span></button>
+      <button class="nav-item drawer-nav-item" data-view="goals"><i data-lucide="target"></i><span>Goals</span></button>
+      <button class="nav-item drawer-nav-item" data-view="debts"><i data-lucide="handshake"></i><span>Debts</span></button>
+      <button class="nav-item drawer-nav-item" data-view="recurring"><i data-lucide="repeat"></i><span>Recurring</span></button>
+      <button class="nav-item drawer-nav-item" data-view="categories"><i data-lucide="tag"></i><span>Categories</span></button>
+    </div>
+    <div class="drawer-foot">
+      <button class="btn" id="drawer-sign-out-btn"><i data-lucide="log-out"></i> Sign out</button>
+    </div>
   </div>
   <div class="sidebar">
     <div class="brand">
@@ -421,15 +491,20 @@
     </div>
     <div class="nav">
       <button class="nav-item active" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></button>
-      <button class="nav-item" data-view="reports"><i data-lucide="bar-chart-3"></i><span>Reports</span></button>
-      <button class="nav-item" data-view="accounts"><i data-lucide="wallet"></i><span>Accounts</span></button>
       <button class="nav-item" data-view="transactions"><i data-lucide="list"></i><span>Transactions</span></button>
-      <button class="nav-item" data-view="recurring"><i data-lucide="repeat"></i><span>Recurring</span></button>
-      <button class="nav-item" data-view="categories"><i data-lucide="tag"></i><span>Categories</span></button>
-      <button class="nav-item" data-view="budgets"><i data-lucide="pie-chart"></i><span>Budgets</span></button>
-      <button class="nav-item" data-view="goals"><i data-lucide="target"></i><span>Goals</span></button>
+      <button class="nav-item" data-view="accounts"><i data-lucide="wallet"></i><span>Accounts</span></button>
       <button class="nav-item" data-view="copilot"><i data-lucide="sparkles"></i><span>Copilot</span></button>
       <button class="nav-item" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></button>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Manage</div>
+    <div class="nav">
+      <button class="nav-item" data-view="reports"><i data-lucide="bar-chart-3"></i><span>Reports</span></button>
+      <button class="nav-item" data-view="budgets"><i data-lucide="pie-chart"></i><span>Budgets</span></button>
+      <button class="nav-item" data-view="goals"><i data-lucide="target"></i><span>Goals</span></button>
+      <button class="nav-item" data-view="debts"><i data-lucide="handshake"></i><span>Debts</span></button>
+      <button class="nav-item" data-view="recurring"><i data-lucide="repeat"></i><span>Recurring</span></button>
+      <button class="nav-item" data-view="categories"><i data-lucide="tag"></i><span>Categories</span></button>
     </div>
     <div class="sidebar-foot">
       <button class="btn" id="sign-out-btn"><i data-lucide="log-out"></i> Sign out</button>
@@ -682,6 +757,70 @@
       <div id="goal-list"></div>
     </div>
 
+
+    <!-- DEBTS -->
+    <div class="view" id="view-debts">
+      <div class="header-row">
+        <div><h1>Debts</h1><div class="subtitle">Money you owe and money owed to you</div></div>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="card-row" style="grid-template-columns:1fr 1fr; margin-bottom:24px;">
+        <div class="stat-card" style="border-left:3px solid var(--coral);">
+          <div class="stat-label">Total I Owe</div>
+          <div class="stat-value expense mono" id="debt-total-owe">₹0.00</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px;" id="debt-owe-count"></div>
+        </div>
+        <div class="stat-card" style="border-left:3px solid var(--teal);">
+          <div class="stat-label">Total Owed to Me</div>
+          <div class="stat-value income mono" id="debt-total-owed">₹0.00</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px;" id="debt-owed-count"></div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="debt-tabs">
+        <button class="debt-tab active" data-tab="owe">I Owe</button>
+        <button class="debt-tab" data-tab="owed">Owed to Me</button>
+      </div>
+
+      <!-- I Owe tab -->
+      <div class="debt-tab-content active" id="debt-tab-owe">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:14px;">
+          <button class="btn btn-primary" id="toggle-owe-form"><i data-lucide="plus"></i>Add debt</button>
+        </div>
+        <div class="form-card" id="owe-form-card">
+          <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 1fr auto auto;">
+            <div class="field"><label>Person / Creditor</label><input type="text" id="owe-person" placeholder="e.g. Rahul"></div>
+            <div class="field"><label>Total Amount</label><input type="number" id="owe-amount" placeholder="0.00" step="0.01"></div>
+            <div class="field"><label>Due Date (optional)</label><input type="date" id="owe-due-date"></div>
+            <div class="field"><label>Notes (optional)</label><input type="text" id="owe-notes" placeholder="e.g. borrowed for laptop"></div>
+            <button class="btn btn-primary" id="owe-submit">Add</button>
+            <button class="btn" id="owe-cancel" style="display:none;">Cancel</button>
+          </div>
+        </div>
+        <div id="owe-list"></div>
+      </div>
+
+      <!-- Owed to Me tab -->
+      <div class="debt-tab-content" id="debt-tab-owed">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:14px;">
+          <button class="btn btn-primary" id="toggle-owed-form"><i data-lucide="plus"></i>Add entry</button>
+        </div>
+        <div class="form-card" id="owed-form-card">
+          <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr 1fr auto auto;">
+            <div class="field"><label>Person / Debtor</label><input type="text" id="owed-person" placeholder="e.g. Priya"></div>
+            <div class="field"><label>Total Amount</label><input type="number" id="owed-amount" placeholder="0.00" step="0.01"></div>
+            <div class="field"><label>Due Date (optional)</label><input type="date" id="owed-due-date"></div>
+            <div class="field"><label>Notes (optional)</label><input type="text" id="owed-notes" placeholder="e.g. lent for trip"></div>
+            <button class="btn btn-primary" id="owed-submit">Add</button>
+            <button class="btn" id="owed-cancel" style="display:none;">Cancel</button>
+          </div>
+        </div>
+        <div id="owed-list"></div>
+      </div>
+    </div>
+
     <!-- COPILOT -->
     <div class="view" id="view-copilot">
       <div class="header-row">
@@ -769,6 +908,7 @@ let budgets = [];
 let goals = [];
 let accounts = [];
 let recurring = [];
+let debts = []; // { id, kind:'owe'|'owed', person, amount, paid, dueDate, notes }
 let selectedSwatch = swatchColors[0];
 let authMode = 'signin'; // or 'signup'
 let currentUser = null;
@@ -944,9 +1084,7 @@ sb.auth.onAuthStateChange((event, session)=>{
 document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
   await sb.auth.signOut();
 });
-document.getElementById('mobile-sign-out-btn').addEventListener('click', async ()=>{
-  await sb.auth.signOut();
-});
+// mobile sign-out now handled by drawer
 
 document.getElementById('recurring-banner-dismiss').addEventListener('click', ()=>{
   document.getElementById('recurring-banner').style.display = 'none';
@@ -1014,6 +1152,12 @@ async function loadEverything(){
 
   const { data: gls } = await sb.from('goals').select('*').order('created_at');
   goals = (gls || []).map(g => ({ id:g.id, name:g.name, target:Number(g.target_amount), saved:Number(g.saved_amount), date:g.target_date }));
+
+  const { data: dts } = await sb.from('debts').select('*').order('created_at', { ascending: false });
+  debts = (dts || []).map(d => ({
+    id: d.id, kind: d.kind, person: d.person, amount: Number(d.amount),
+    paid: Number(d.paid_amount), dueDate: d.due_date, notes: d.notes
+  }));
 
   renderAll();
   loadedForUserId = userIdAtStart;
@@ -2323,6 +2467,260 @@ document.getElementById('delete-account-btn').addEventListener('click', async ()
   await sb.auth.signOut();
 });
 
+// ================= Hamburger drawer =================
+const hamburgerBtn = document.getElementById('hamburger-btn');
+const drawer = document.getElementById('drawer');
+const drawerOverlay = document.getElementById('drawer-overlay');
+const drawerCloseBtn = document.getElementById('drawer-close-btn');
+
+function openDrawer(){
+  drawer.classList.add('open');
+  drawerOverlay.classList.add('open');
+}
+function closeDrawer(){
+  drawer.classList.remove('open');
+  drawerOverlay.classList.remove('open');
+}
+
+if(hamburgerBtn) hamburgerBtn.addEventListener('click', openDrawer);
+if(drawerCloseBtn) drawerCloseBtn.addEventListener('click', closeDrawer);
+if(drawerOverlay) drawerOverlay.addEventListener('click', closeDrawer);
+
+document.querySelectorAll('.drawer-nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.drawer-nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    const viewEl = document.getElementById('view-' + btn.dataset.view);
+    if(viewEl) viewEl.classList.add('active');
+    closeDrawer();
+  });
+});
+
+const drawerSignOut = document.getElementById('drawer-sign-out-btn');
+if(drawerSignOut) drawerSignOut.addEventListener('click', async () => { await sb.auth.signOut(); });
+
+// ================= Debt tabs =================
+document.querySelectorAll('.debt-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.debt-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.debt-tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('debt-tab-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ================= Debts =================
+let editingDebtId = null;
+let editingDebtKind = null;
+
+function fmtDueDate(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.round((d - today) / (1000*60*60*24));
+  if(diff < 0) return { label: 'Overdue by ' + Math.abs(diff) + 'd', overdue: true };
+  if(diff === 0) return { label: 'Due today', overdue: true };
+  if(diff <= 7) return { label: 'Due in ' + diff + ' days', overdue: false };
+  return { label: 'Due ' + d.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }), overdue: false };
+}
+
+function renderDebts(){
+  const oweList = debts.filter(d => d.kind === 'owe');
+  const owedList = debts.filter(d => d.kind === 'owed');
+
+  const totalOwe = oweList.reduce((s,d) => s + Math.max(0, d.amount - d.paid), 0);
+  const totalOwed = owedList.reduce((s,d) => s + Math.max(0, d.amount - d.paid), 0);
+
+  document.getElementById('debt-total-owe').textContent = fmt(totalOwe);
+  document.getElementById('debt-total-owed').textContent = fmt(totalOwed);
+  document.getElementById('debt-owe-count').textContent = oweList.length + ' debt' + (oweList.length !== 1 ? 's' : '');
+  document.getElementById('debt-owed-count').textContent = owedList.length + ' entr' + (owedList.length !== 1 ? 'ies' : 'y');
+
+  function debtCardHtml(d){
+    const remaining = Math.max(0, d.amount - d.paid);
+    const pct = d.amount > 0 ? Math.min(100, (d.paid / d.amount) * 100) : 0;
+    const fullyPaid = remaining === 0;
+    const fillColor = d.kind === 'owe' ? 'var(--coral)' : 'var(--teal)';
+    const due = d.dueDate ? fmtDueDate(d.dueDate) : null;
+
+    return `<div class="debt-card ${d.kind} ${fullyPaid ? 'paid' : ''}">
+      <div class="debt-top">
+        <div>
+          <div class="debt-person">${d.person}</div>
+          <div class="debt-meta">
+            ${d.notes ? `<span>${d.notes}</span>` : ''}
+            ${due ? `<span class="${due.overdue && !fullyPaid ? 'overdue-badge' : ''}">${due.label}</span>` : ''}
+            ${fullyPaid ? '<span class="paid-badge">✓ Settled</span>' : ''}
+          </div>
+        </div>
+        <div class="debt-amount-col">
+          <div class="debt-total mono">${fmt(d.amount)}</div>
+          ${!fullyPaid ? `<div class="debt-remaining">${fmt(remaining)} left</div>` : ''}
+        </div>
+      </div>
+      <div class="debt-track">
+        <div class="debt-fill" style="width:${pct}%; background:${fillColor};"></div>
+      </div>
+      <div class="debt-actions-row">
+        ${!fullyPaid ? `
+          <div class="debt-pay-row">
+            <input type="number" placeholder="Pay amount" step="0.01" class="debt-pay-input" data-id="${d.id}" style="max-width:120px;">
+            <button class="btn" data-id="${d.id}" data-action="pay">Record payment</button>
+          </div>` : '<div></div>'}
+        <div class="cat-actions">
+          <button class="icon-btn" data-id="${d.id}" data-action="edit"><i data-lucide="pencil"></i>edit</button>
+          <button class="icon-btn danger" data-id="${d.id}" data-action="remove"><i data-lucide="trash-2"></i>remove</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('owe-list').innerHTML = oweList.length
+    ? oweList.map(debtCardHtml).join('')
+    : '<div class="empty">No debts recorded. Add one above.</div>';
+
+  document.getElementById('owed-list').innerHTML = owedList.length
+    ? owedList.map(debtCardHtml).join('')
+    : '<div class="empty">Nobody owes you anything right now.</div>';
+
+  // Bind pay / edit / remove
+  document.querySelectorAll('#owe-list [data-action="pay"], #owed-list [data-action="pay"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const input = document.querySelector(`.debt-pay-input[data-id="${id}"]`);
+      const amt = parseFloat(input.value);
+      if(!amt || amt <= 0) return;
+      const d = debts.find(x => x.id === id);
+      if(!d) return;
+      const newPaid = Math.min(d.amount, d.paid + amt);
+      const { data, error } = await sb.from('debts').update({ paid_amount: newPaid }).eq('id', id).select().single();
+      if(error){ alert(error.message); return; }
+      d.paid = Number(data.paid_amount);
+      input.value = '';
+      renderDebts();
+      if(window.lucide) lucide.createIcons();
+    });
+  });
+
+  document.querySelectorAll('#owe-list [data-action="remove"], #owed-list [data-action="remove"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      if(!confirm('Delete this debt record?')) return;
+      await sb.from('debts').delete().eq('id', id);
+      debts = debts.filter(d => d.id !== id);
+      renderDebts();
+      if(window.lucide) lucide.createIcons();
+    });
+  });
+
+  document.querySelectorAll('#owe-list [data-action="edit"], #owed-list [data-action="edit"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const d = debts.find(x => x.id === id);
+      if(!d) return;
+      editingDebtId = id;
+      editingDebtKind = d.kind;
+      if(d.kind === 'owe'){
+        document.getElementById('owe-person').value = d.person;
+        document.getElementById('owe-amount').value = d.amount;
+        document.getElementById('owe-due-date').value = d.dueDate || '';
+        document.getElementById('owe-notes').value = d.notes || '';
+        document.getElementById('owe-submit').textContent = 'Save changes';
+        document.getElementById('owe-cancel').style.display = 'inline-block';
+        document.getElementById('owe-form-card').classList.add('open');
+      } else {
+        document.getElementById('owed-person').value = d.person;
+        document.getElementById('owed-amount').value = d.amount;
+        document.getElementById('owed-due-date').value = d.dueDate || '';
+        document.getElementById('owed-notes').value = d.notes || '';
+        document.getElementById('owed-submit').textContent = 'Save changes';
+        document.getElementById('owed-cancel').style.display = 'inline-block';
+        document.getElementById('owed-form-card').classList.add('open');
+      }
+    });
+  });
+}
+
+function resetDebtForm(kind){
+  editingDebtId = null; editingDebtKind = null;
+  if(kind === 'owe'){
+    document.getElementById('owe-person').value = '';
+    document.getElementById('owe-amount').value = '';
+    document.getElementById('owe-due-date').value = '';
+    document.getElementById('owe-notes').value = '';
+    document.getElementById('owe-submit').textContent = 'Add';
+    document.getElementById('owe-cancel').style.display = 'none';
+    document.getElementById('owe-form-card').classList.remove('open');
+  } else {
+    document.getElementById('owed-person').value = '';
+    document.getElementById('owed-amount').value = '';
+    document.getElementById('owed-due-date').value = '';
+    document.getElementById('owed-notes').value = '';
+    document.getElementById('owed-submit').textContent = 'Add';
+    document.getElementById('owed-cancel').style.display = 'none';
+    document.getElementById('owed-form-card').classList.remove('open');
+  }
+}
+
+document.getElementById('toggle-owe-form').addEventListener('click', () => {
+  const card = document.getElementById('owe-form-card');
+  card.classList.contains('open') ? resetDebtForm('owe') : (resetDebtForm('owe'), card.classList.add('open'));
+});
+document.getElementById('owe-cancel').addEventListener('click', () => resetDebtForm('owe'));
+
+document.getElementById('toggle-owed-form').addEventListener('click', () => {
+  const card = document.getElementById('owed-form-card');
+  card.classList.contains('open') ? resetDebtForm('owed') : (resetDebtForm('owed'), card.classList.add('open'));
+});
+document.getElementById('owed-cancel').addEventListener('click', () => resetDebtForm('owed'));
+
+async function submitDebt(kind){
+  const personEl = document.getElementById(kind + '-person');
+  const amountEl = document.getElementById(kind + '-amount');
+  const dueDateEl = document.getElementById(kind + '-due-date');
+  const notesEl = document.getElementById(kind + '-notes');
+  const submitBtn = document.getElementById(kind + '-submit');
+
+  const person = personEl.value.trim();
+  const amount = parseFloat(amountEl.value);
+  const dueDate = dueDateEl.value || null;
+  const notes = notesEl.value.trim() || null;
+
+  if(!person || !amount || amount <= 0) return;
+
+  submitBtn.disabled = true;
+
+  if(editingDebtId && editingDebtKind === kind){
+    const { data, error } = await sb.from('debts')
+      .update({ person, amount, due_date: dueDate, notes })
+      .eq('id', editingDebtId).select().single();
+    submitBtn.disabled = false;
+    if(error){ alert(error.message); return; }
+    const idx = debts.findIndex(d => d.id === editingDebtId);
+    if(idx > -1) debts[idx] = { ...debts[idx], person: data.person, amount: Number(data.amount), dueDate: data.due_date, notes: data.notes };
+    resetDebtForm(kind);
+    renderDebts();
+    if(window.lucide) lucide.createIcons();
+    return;
+  }
+
+  const { data, error } = await sb.from('debts').insert({
+    user_id: currentUser.id, kind, person, amount, paid_amount: 0, due_date: dueDate, notes
+  }).select().single();
+
+  submitBtn.disabled = false;
+  if(error){ alert(error.message); return; }
+  debts.unshift({ id: data.id, kind: data.kind, person: data.person, amount: Number(data.amount), paid: 0, dueDate: data.due_date, notes: data.notes });
+  resetDebtForm(kind);
+  renderDebts();
+  if(window.lucide) lucide.createIcons();
+}
+
+document.getElementById('owe-submit').addEventListener('click', () => submitDebt('owe'));
+document.getElementById('owed-submit').addEventListener('click', () => submitDebt('owed'));
+
 // ================= Render all =================
 function renderAll(){
   renderCatOptions();
@@ -2339,38 +2737,12 @@ function renderAll(){
   renderReports();
   renderCopilot();
   renderSettings();
+  renderDebts();
   if(window.lucide) lucide.createIcons();
 }
 renderSwatchPicker();
 if(window.lucide) lucide.createIcons();
 </script>
 
-<script>
-
-  if ("serviceWorker" in navigator) {
-
-    window.addEventListener("load", function () {
-
-      navigator.serviceWorker
-
-        .register("/sw.js")
-
-        .then(function (reg) {
-
-          console.log("Kairn SW registered:", reg.scope);
-
-        })
-
-        .catch(function (err) {
-
-          console.warn("Kairn SW registration failed:", err);
-
-        });
-
-    });
-
-  }
-
-</script>
 </body>
 </html>
